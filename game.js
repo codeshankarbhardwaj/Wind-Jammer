@@ -9,12 +9,55 @@ canvas.height = height;
 const ctx = canvas.getContext("2d");
 
 const disc = {
-  x: 100,
+  x: 400,
   y: height / 2,
   radius: 30,
-  vx: 4 * Math.cos(Math.PI / 4),
-  vy: 4 * Math.sin(Math.PI / 4),
+  vx: 0,
+  vy: 0,
 };
+
+const players = [
+  {
+    x: 100,
+    y: height / 2,
+    width: 30,
+    height: 50,
+    vx: 0,
+    vy: 0,
+    score: 0,
+  },
+  {
+    x: width - 130,
+    y: height / 2,
+    width: 30,
+    height: 50,
+    vx: 0,
+    vy: 0,
+    score: 0,
+  },
+];
+let held = -1;
+let lastThrower = -1;
+
+window.addEventListener("keydown", (e) => {
+  if (e.key == "w") players[0].vy = -4;
+  if (e.key == "s") players[0].vy = 4;
+  if (e.key == "a") players[0].vx = -4;
+  if (e.key == "d") players[0].vx = 4;
+  if (e.code == "Space" && held != -1) {
+    lastThrower = held;
+    disc.vx = held == 0 ? 4 : -4;
+    disc.vy = players[held].vy != 0 ? players[held].vy : 0;
+    held = -1;
+  }
+});
+
+window.addEventListener("keyup", (e) => {
+  if (e.key == "w" && players[0].vy < 0) players[0].vy = 0;
+  if (e.key == "s" && players[0].vy > 0) players[0].vy = 0;
+  if (e.key == "a" && players[0].vx < 0) players[0].vx = 0;
+  if (e.key == "d" && players[0].vx > 0) players[0].vx = 0;
+});
 
 const courtRectangles = [
   { x: 100, y: 0, width: width - 200, height: 50 },
@@ -58,6 +101,30 @@ function goalCollision(disc, rect) {
   }
 }
 
+function playerCollision(disc, player, playerIndex) {
+  if (playerIndex == lastThrower) {
+    return;
+  }
+
+  const closestX = Math.max(
+    player.x,
+    Math.min(disc.x, player.x + player.width),
+  );
+  const closestY = Math.max(
+    player.y,
+    Math.min(disc.y, player.y + player.height),
+  );
+
+  const dx = disc.x - closestX;
+  const dy = disc.y - closestY;
+
+  if (dx * dx + dy * dy < disc.radius * disc.radius) {
+    held = playerIndex;
+    disc.vx = 0;
+    disc.vy = 0;
+  }
+}
+
 function drawCourt() {
   ctx.fillStyle = "#F5EBD8";
   ctx.fillRect(0, 0, width, height);
@@ -86,15 +153,45 @@ function drawDisc() {
   ctx.fill();
 }
 
+function updateDisc() {
+  if (held != -1) {
+    const p = players[held];
+    disc.x = held === 0 ? p.x + p.width + disc.radius : p.x - disc.radius;
+    disc.y = p.y + p.height / 2;
+  } else {
+    disc.x += disc.vx;
+    disc.y += disc.vy;
+
+    courtRectangles.forEach((rect) => discCollision(disc, rect));
+    goalRectangles.forEach((rect) => goalCollision(disc, rect));
+    players.forEach((player, index) => playerCollision(disc, player, index));
+  }
+}
+
+function drawPlayers() {
+  players.forEach((player) => {
+    ctx.beginPath();
+    ctx.fillStyle = "#00FF00";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+  });
+}
+
+function updatePlayer(player) {
+  player.x += player.vx;
+  player.y += player.vy;
+
+  if (player.x < 60) player.x = 60;
+  if (player.x > width / 2 - 40) player.x = width / 2 - 40;
+  if (player.y < 60) player.y = 60;
+  if (player.y > height - 110) player.y = height - 110;
+}
+
 function animate() {
-  disc.x += disc.vx;
-  disc.y += disc.vy;
-
-  courtRectangles.forEach((rect) => discCollision(disc, rect));
-  goalRectangles.forEach((rect) => goalCollision(disc, rect));
-
   drawCourt();
   drawDisc();
+  drawPlayers();
+  updateDisc();
+  updatePlayer(players[0]);
 
   requestAnimationFrame(animate);
 }
