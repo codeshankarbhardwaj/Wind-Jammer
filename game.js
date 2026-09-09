@@ -1,27 +1,12 @@
-var home = document.getElementById("home");
-var start = document.getElementById("start");
-var theme = document.getElementById("theme");
-
-var canvas;
-var ctx;
-var activeTheme = "midnight";
+const canvas = document.getElementById("game");
 
 const width = 960;
 const height = 540;
 
-start.onclick = function() {
+canvas.width = width;
+canvas.height = height;
 
-    activeTheme = theme.value;
-    home.style.display = "none";
-    canvas = document.createElement("canvas");
-
-    canvas.width = width;
-    canvas.height = height;
-
-    document.body.appendChild(canvas);
-    ctx = canvas.getContext("2d");
-    starting();
-};
+const ctx = canvas.getContext("2d");
 
 const disc = {
   x: 400,
@@ -110,87 +95,6 @@ const goalRectangles = [
   { x: width - 50, y: 50, width: 50, height: height - 100 },
 ];
 
-function getThemeColors() {
-
-    if (activeTheme == "midnight") {
-
-        return {
-            background: "#111827",
-            side: "#374151",
-            court: "#1e293b",
-            line: "#ffffff",
-            player: "#22c55e",
-            disc: "#ef4444"
-        };
-
-    }
-
-    if (activeTheme == "ocean") {
-
-        return {
-            background: "#0c4a6e",
-            side: "#075985",
-            court: "#38bdf8",
-            line: "#ffffff",
-            player: "#22c55e",
-            disc: "#facc15"
-        };
-
-    }
-
-    if (activeTheme == "sunset") {
-
-        return {
-            background: "#7c2d12",
-            side: "#9a3412",
-            court: "#fb923c",
-            line: "#ffffff",
-            player: "#22c55e",
-            disc: "#fef08a"
-        };
-
-    }
-
-}
-
-function drawCourt() {
-
-    var colors = getThemeColors();
-
-    ctx.fillStyle = colors.background;
-    ctx.fillRect(0,0,width,height);
-    ctx.fillStyle = colors.side;
-
-    ctx.fillRect(0,0,50,height);
-    ctx.fillRect(width - 50,0,50,height);
-    ctx.fillStyle = colors.court;
-
-    ctx.fillRect(100,0,width - 200,50);
-    ctx.fillRect(100,height - 50,width - 200,50);
-
-    ctx.beginPath();
-
-    ctx.strokeStyle = colors.line;
-    ctx.lineWidth = 3;
-    ctx.moveTo(width / 2,0);
-    ctx.lineTo(width / 2,height);
-    ctx.stroke();
-
-    ctx.strokeStyle = colors.line;
-    ctx.strokeRect(0,0,width,height);
-
-}
-
-function drawDisc() {
-
-    var colors = getThemeColors();
-    ctx.beginPath();
-
-    ctx.arc(disc.x,disc.y,disc.radius,0,Math.PI * 2);
-    ctx.fillStyle = colors.disc;
-    ctx.fill();
-}
-
 function discCollision(disc, rect) {
   const closestX = Math.max(rect.x, Math.min(disc.x, rect.x + rect.width));
   const closestY = Math.max(rect.y, Math.min(disc.y, rect.y + rect.height));
@@ -265,6 +169,44 @@ function playerCollision(disc, player, playerIndex) {
   }
 }
 
+function drawCourt() {
+  ctx.fillStyle = "#F5EBD8";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#D3D3D3";
+  ctx.fillRect(0, 0, 50, height);
+  ctx.fillRect(width, 0, -50, height);
+
+  courtRectangles.forEach((rect) => {
+    rect.offsetY *= 0.8;
+    if (Math.abs(rect.offsetY) < 0.1) rect.offsetY = 0;
+
+    if (rect.hitTimer > 0) {
+      rect.hitTimer--;
+      ctx.fillStyle = "#FFF";
+    } else {
+      ctx.fillStyle = "#E0FFFF";
+    }
+
+    ctx.fillRect(rect.x, rect.y + rect.offsetY, rect.width, rect.height);
+  });
+
+  ctx.beginPath();
+  ctx.strokeStyle = "#000000";
+  ctx.lineWidth = 3;
+  ctx.moveTo(width / 2, 0);
+  ctx.lineTo(width / 2, height);
+  ctx.stroke();
+  ctx.strokeRect(0, 0, width, height);
+}
+
+function drawDisc() {
+  ctx.beginPath();
+  ctx.arc(disc.x, disc.y, disc.radius, 0, Math.PI * 2);
+  ctx.fillStyle = "#FF0000";
+  ctx.fill();
+}
+
 function updateDisc() {
   if (held != -1) {
     const p = players[held];
@@ -333,35 +275,52 @@ function updatePlayer(player) {
   if (player.x < 100) player.x = 100;
   if (player.x > width / 2 - player.width - 75)
     player.x = width / 2 - player.width - 75;
-  if (player.y < 50) player.y = 50;
-  if (player.y > height - 125 - player.height)
-    player.y = height - 125 - player.height;
+  if (player.y < 100) player.y = 100;
+  if (player.y > height - 100 - player.height)
+    player.y = height - 100 - player.height;
+}
+
+function drawScoreboard() {
+  const scores = [players[0].score, players[1].score];
+  const positions = [width / 4, (3 * width) / 4];
+  const labels = ["P1", "P2"];
+
+  positions.forEach((cx, i) => {
+    const text = `${labels[i]}  ${scores[i]}`;
+    ctx.font = "bold 22px monospace";
+    const textW = ctx.measureText(text).width;
+
+    const padX = 14,
+      padY = 8;
+    const rx = cx - textW / 2 - padX;
+    const ry = 6;
+    const rw = textW + padX * 2;
+    const rh = 22 + padY * 2;
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.beginPath();
+    ctx.roundRect(rx, ry, rw, rh, 8);
+    ctx.fill();
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, cx, ry + rh / 2);
+  });
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
 }
 
 function animate() {
   drawCourt();
   drawDisc();
   drawPlayers();
+  drawScoreboard();
   updateDisc();
   updatePlayer(players[0]);
 
   requestAnimationFrame(animate);
 }
-function starting() {
 
-    disc.x = width / 2;
-    disc.y = height / 2;
-
-    disc.vx = 0;
-    disc.vy = 0;
-
-    held = -1;
-    lastThrower = -1;
-
-    drawCourt();
-    drawDisc();
-    drawPlayers();
-
-    animate();
-}
-
+drawCourt();
+animate();
