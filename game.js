@@ -1,12 +1,41 @@
 const canvas = document.getElementById("game");
 
-const width = 960;
-const height = 540;
+const width = 912;
+const height = 672;
 
 canvas.width = width;
 canvas.height = height;
 
 const ctx = canvas.getContext("2d");
+
+const beachImages = {
+  base: new Image(),
+  topRail: new Image(),
+  bottomRail: new Image(),
+  net: new Image(),
+  leftGoal: new Image(),
+  rightGoal: new Image(),
+  leftGoalGuard: new Image(),
+  rightGoalGuard: new Image(),
+};
+
+beachImages.base.src = "assets/images/background/beach/base.png";
+beachImages.topRail.src = "assets/images/background/beach/topRail.png";
+beachImages.bottomRail.src = "assets/images/background/beach/bottomRail.png";
+beachImages.net.src = "assets/images/background/beach/net.png";
+beachImages.leftGoal.src = "assets/images/background/beach/leftGoal.png";
+beachImages.rightGoal.src = "assets/images/background/beach/rightGoal.png";
+beachImages.leftGoalGuard.src =
+  "assets/images/background/beach/leftGoalGuard.png";
+beachImages.rightGoalGuard.src =
+  "assets/images/background/beach/rightGoalGuard.png";
+
+let bgFrame = 0;
+let bgTick = 0;
+const BG_FRAME_TICKS = 10;
+const BG_FRAMES = 4;
+const BG_FRAME_WIDTH = 304;
+const BG_FRAME_HEIGHT = 224;
 
 const disc = {
   x: 400,
@@ -80,50 +109,44 @@ window.addEventListener("keyup", (e) => {
   if (e.key == "d" && players[0].vx > 0) players[0].vx = 0;
 });
 
-const courtRectangles = [
-  {
-    x: 70,
-    y: 0,
-    width: width - 140,
-    height: 52,
-    offsetY: 0,
-    hitTimer: 0,
-    dir: -1,
-  },
-  {
-    x: 70,
-    y: height - 52,
-    width: width - 140,
-    height: 52,
-    offsetY: 0,
-    hitTimer: 0,
-    dir: 1,
-  },
+const RAIL_TOP_Y = 56 * 3;
+const RAIL_BOTTOM_Y = 196 * 3;
+
+const rails = [
+  { dir: -1, hitTimer: 0, offsetY: 0 },
+  { dir: 1, hitTimer: 0, offsetY: 0 },
 ];
 
 const goalRectangles = [
-  { x: 0, y: 52, width: 70, height: height - 104, left: true },
-  { x: width - 70, y: 52, width: 70, height: height - 104 },
+  {
+    x: 0,
+    y: RAIL_TOP_Y,
+    width: 70,
+    height: RAIL_BOTTOM_Y - RAIL_TOP_Y,
+    left: true,
+  },
+  {
+    x: width - 70,
+    y: RAIL_TOP_Y,
+    width: 70,
+    height: RAIL_BOTTOM_Y - RAIL_TOP_Y,
+  },
 ];
 
-function discCollision(disc, rect) {
-  const closestX = Math.max(rect.x, Math.min(disc.x, rect.x + rect.width));
-  const closestY = Math.max(rect.y, Math.min(disc.y, rect.y + rect.height));
+function bounceRails(disc) {
 
-  const dx = disc.x - closestX;
-  const dy = disc.y - closestY;
+  if (disc.y - disc.radius < RAIL_TOP_Y) {
+    disc.y = RAIL_TOP_Y + disc.radius;
+    disc.vy = Math.abs(disc.vy);
+    rails[0].offsetY = -14;
+    rails[0].hitTimer = 8;
+  }
 
-  if (dx * dx + dy * dy < disc.radius * disc.radius) {
-    if (Math.abs(dx) > Math.abs(dy)) {
-      disc.vx = -disc.vx;
-      disc.x = closestX + Math.sign(dx) * disc.radius;
-    } else {
-      disc.vy = -disc.vy;
-      disc.y = closestY + Math.sign(dy) * disc.radius;
-    }
-
-    rect.offsetY = rect.dir * 8;
-    rect.hitTimer = 8;
+  if (disc.y + disc.radius > RAIL_BOTTOM_Y) {
+    disc.y = RAIL_BOTTOM_Y - disc.radius;
+    disc.vy = -Math.abs(disc.vy);
+    rails[1].offsetY = 14;
+    rails[1].hitTimer = 8;
   }
 }
 
@@ -135,16 +158,21 @@ function goalCollision(disc, rect) {
   const dy = disc.y - closestY;
 
   if (dx * dx + dy * dy < disc.radius * disc.radius) {
+
+    const hitY = disc.y;
+    const goalH = RAIL_BOTTOM_Y - RAIL_TOP_Y;
+    const seg3H = Math.floor(goalH * 0.28);
+    const topBand = RAIL_TOP_Y + seg3H;
+    const bottomBand = RAIL_BOTTOM_Y - seg3H;
+
+    const pointsAwarded = hitY < topBand || hitY > bottomBand ? 3 : 5;
+
     disc.x = width / 2;
-    disc.y = 100;
+    disc.y = (RAIL_TOP_Y + RAIL_BOTTOM_Y) / 2;
     disc.vx = 0;
     disc.vy = 0;
     disc.curve = 0;
     disc.history = [];
-
-    const goalCenterY = 52 + (height - 104) / 2;
-    const distFromCenter = Math.abs(disc.y - goalCenterY);
-    const pointsAwarded = distFromCenter < 90 ? 3 : 5;
 
     if (rect.left) {
       players[1].score += pointsAwarded;
@@ -210,181 +238,93 @@ function playerCollision(disc, player, playerIndex) {
 }
 
 function drawCourt() {
-  ctx.fillStyle = "#0c3b63";
-  ctx.fillRect(0, 0, width, height);
-
-  const courtX = 70;
-  const courtY = 52;
-  const courtW = width - 140;
-  const courtH = height - 104;
-
-  const grad = ctx.createLinearGradient(0, courtY, 0, courtY + courtH);
-  grad.addColorStop(0, "#f3ce85");
-  grad.addColorStop(0.5, "#fad89a");
-  grad.addColorStop(1, "#ebd08c");
-  ctx.fillStyle = grad;
-  ctx.fillRect(courtX, courtY, courtW, courtH);
-
-  ctx.strokeStyle = "rgba(224, 185, 110, 0.4)";
-  ctx.lineWidth = 1;
-  for (let x = courtX + 40; x < courtX + courtW; x += 40) {
-    ctx.beginPath();
-    ctx.moveTo(x, courtY);
-    ctx.lineTo(x, courtY + courtH);
-    ctx.stroke();
-  }
-  for (let y = courtY + 36; y < courtY + courtH; y += 36) {
-    ctx.beginPath();
-    ctx.moveTo(courtX, y);
-    ctx.lineTo(courtX + courtW, y);
-    ctx.stroke();
+  bgTick++;
+  if (bgTick >= BG_FRAME_TICKS) {
+    bgTick = 0;
+    bgFrame = (bgFrame + 1) % BG_FRAMES;
   }
 
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 4;
-  ctx.strokeRect(courtX, courtY, courtW, courtH);
+  if (beachImages.base.complete && beachImages.base.naturalWidth != 0) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      beachImages.base,
+      bgFrame * BG_FRAME_WIDTH,
+      0,
+      BG_FRAME_WIDTH,
+      BG_FRAME_HEIGHT,
+      0,
+      0,
+      width,
+      height,
+    );
 
-  ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
-  ctx.fillRect(courtX, courtY, courtW / 2, courtH);
+    const overlays = [
+      beachImages.net,
+      beachImages.leftGoalGuard,
+      beachImages.rightGoalGuard,
+      beachImages.leftGoal,
+      beachImages.rightGoal,
 
-  ctx.beginPath();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-  ctx.lineWidth = 6;
-  ctx.arc(width / 2, height / 2, 75, 0, Math.PI * 2);
-  ctx.stroke();
+    ];
 
-  ctx.save();
-  ctx.translate(width / 2, height / 2);
-  ctx.rotate(-Math.PI / 6);
-  ctx.font = "bold 15px monospace";
-  ctx.fillStyle = "rgba(180, 130, 40, 0.4)";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("WINDJAMMERS", 0, 0);
-  ctx.restore();
-
-  ctx.beginPath();
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 3;
-  ctx.setLineDash([8, 6]);
-  ctx.moveTo(width / 2, courtY);
-  ctx.lineTo(width / 2, courtY + courtH);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  drawGoalZones();
-
-  courtRectangles.forEach((rect) => {
-    rect.offsetY *= 0.8;
-    if (Math.abs(rect.offsetY) < 0.1) rect.offsetY = 0;
-
-    const ry = rect.y + rect.offsetY;
-
-    if (rect.hitTimer > 0) {
-      rect.hitTimer--;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(rect.x, ry, rect.width, rect.height);
-      ctx.strokeStyle = "#ffeb3b";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(rect.x, ry, rect.width, rect.height);
-    } else {
-      ctx.fillStyle = "#1e2838";
-      ctx.fillRect(rect.x, ry, rect.width, rect.height);
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(rect.x, ry, rect.width, rect.height);
-      ctx.clip();
-      ctx.fillStyle = "#fbc02d";
-      const stripeW = 28;
-      for (
-        let sx = rect.x - 50;
-        sx < rect.x + rect.width + 50;
-        sx += stripeW * 2
-      ) {
-        ctx.beginPath();
-        ctx.moveTo(sx, ry);
-        ctx.lineTo(sx + stripeW, ry);
-        ctx.lineTo(sx + stripeW - 20, ry + rect.height);
-        ctx.lineTo(sx - 20, ry + rect.height);
-        ctx.fill();
+    overlays.forEach((img) => {
+      if (img.complete && img.naturalWidth != 0) {
+        ctx.drawImage(
+          img,
+          0,
+          0,
+          BG_FRAME_WIDTH,
+          BG_FRAME_HEIGHT,
+          0,
+          0,
+          width,
+          height,
+        );
       }
-      ctx.restore();
+    });
 
-      ctx.strokeStyle = "#37474f";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(rect.x, ry, rect.width, rect.height);
-      ctx.fillStyle = rect.dir == -1 ? "#4fc3f7" : "#ff8a80";
-      ctx.fillRect(
-        rect.x,
-        rect.dir == -1 ? ry + rect.height - 4 : ry,
-        rect.width,
-        4,
-      );
-    }
-  });
+    rails.forEach((rail) => {
+      rail.offsetY *= 0.75;
+      if (Math.abs(rail.offsetY) < 0.5) rail.offsetY = 0;
+      if (rail.hitTimer > 0) rail.hitTimer--;
+    });
+
+    ctx.save();
+    ctx.translate(0, rails[0].offsetY);
+    ctx.drawImage(
+      beachImages.topRail,
+      0,
+      0,
+      BG_FRAME_WIDTH,
+      BG_FRAME_HEIGHT,
+      0,
+      0,
+      width,
+      height,
+    );
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(-29 * 3, rails[1].offsetY);
+    ctx.drawImage(
+      beachImages.bottomRail,
+      0,
+      0,
+      BG_FRAME_WIDTH,
+      BG_FRAME_HEIGHT,
+      0,
+      0,
+      width,
+      height,
+    );
+    ctx.restore();
+  } else {
+    ctx.fillStyle = "#0c3b63";
+    ctx.fillRect(0, 0, width, height);
+  }
 }
 
-function drawGoalZones() {
-  const goalH = height - 104;
-  const seg5H = Math.floor(goalH * 0.28);
-  const seg3H = goalH - seg5H * 2;
 
-  [
-    { x: 0, isLeft: true },
-    { x: width - 70, isLeft: false },
-  ].forEach((g) => {
-    const yTop = 52;
-    const yMid = 52 + seg5H;
-    const yBot = 52 + seg5H + seg3H;
-
-    ctx.fillStyle = "#d32f2f";
-    ctx.fillRect(g.x, yTop, 70, seg5H);
-
-    ctx.fillStyle = "#fbc02d";
-    ctx.fillRect(g.x, yMid, 70, seg3H);
-
-    ctx.fillStyle = "#d32f2f";
-    ctx.fillRect(g.x, yBot, 70, seg5H);
-
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
-    ctx.lineWidth = 1;
-    for (let gx = g.x; gx <= g.x + 70; gx += 10) {
-      ctx.beginPath();
-      ctx.moveTo(gx, 52);
-      ctx.lineTo(gx, 52 + goalH);
-      ctx.stroke();
-    }
-    for (let gy = 52; gy <= 52 + goalH; gy += 10) {
-      ctx.beginPath();
-      ctx.moveTo(g.x, gy);
-      ctx.lineTo(g.x + 70, gy);
-      ctx.stroke();
-    }
-
-    ctx.font = "bold 15px monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    ctx.fillStyle = "#000000";
-    ctx.fillText("5", g.x + 36, yTop + seg5H / 2 + 2);
-    ctx.fillText("3", g.x + 36, yMid + seg3H / 2 + 2);
-    ctx.fillText("5", g.x + 36, yBot + seg5H / 2 + 2);
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText("5", g.x + 35, yTop + seg5H / 2);
-    ctx.fillText("3", g.x + 35, yMid + seg3H / 2);
-    ctx.fillText("5", g.x + 35, yBot + seg5H / 2);
-
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 3;
-    const lineX = g.isLeft ? 70 : width - 70;
-    ctx.beginPath();
-    ctx.moveTo(lineX, 52);
-    ctx.lineTo(lineX, 52 + goalH);
-    ctx.stroke();
-  });
-}
 
 function drawScoreboard() {
   const sbW = 460;
@@ -612,9 +552,6 @@ function drawDisc() {
       ctx.fillStyle = "#ffea00";
       ctx.fill();
     }
-
-    rect.offsetY = rect.dir * 8;
-    rect.hitTimer = 6;
   }
 
   ctx.beginPath();
@@ -733,7 +670,7 @@ function updateDisc() {
     disc.x += disc.vx;
     disc.y += disc.vy;
 
-    courtRectangles.forEach((rect) => discCollision(disc, rect));
+    bounceRails(disc);
     goalRectangles.forEach((rect) => goalCollision(disc, rect));
     players.forEach((player, index) => playerCollision(disc, player, index));
   }
@@ -768,9 +705,9 @@ function updatePlayer(player, isRight = false) {
       player.x = width - 75 - player.width;
   }
 
-  if (player.y < 70) player.y = 70;
-  if (player.y > height - 70 - player.height)
-    player.y = height - 70 - player.height;
+  if (player.y < RAIL_TOP_Y) player.y = RAIL_TOP_Y;
+  if (player.y > RAIL_BOTTOM_Y - player.height)
+    player.y = RAIL_BOTTOM_Y - player.height;
 }
 
 function updateHumanThrow() {
@@ -823,8 +760,8 @@ function updateAI() {
     const travelTime = disc.vx != 0 ? dx / disc.vx : 0;
     const predictedY = disc.y + disc.vy * travelTime + ai.reactionJitter;
 
-    const minY = 70 + ai_player.height / 2;
-    const maxY = height - 70 - ai_player.height / 2;
+    const minY = RAIL_TOP_Y + ai_player.height / 2;
+    const maxY = RAIL_BOTTOM_Y - ai_player.height / 2;
     targetY = Math.max(minY, Math.min(maxY, predictedY)) - ai_player.height / 2;
   } else {
     targetY = centerY;
