@@ -1,283 +1,203 @@
-var home = document.getElementById("home");
-var start = document.getElementById("start");
-var theme = document.getElementById("theme");
 
-var canvas;
-var ctx;
-var activeTheme = "midnight";
 
-const width = 960;
-const height = 540;
 
-start.onclick = function() {
-
-    activeTheme = theme.value;
-    home.style.display = "none";
-    canvas = document.createElement("canvas");
-
-    canvas.width = width;
-    canvas.height = height;
-
-    document.body.appendChild(canvas);
-    ctx = canvas.getContext("2d");
-    starting();
-};
-
-const disc = {
-  x: 400,
-  y: height / 2,
-  radius: 30,
-  vx: 0,
-  vy: 0,
-};
-
-const players = [
-  {
-    x: 100,
-    y: height / 2,
-    width: 30,
-    height: 50,
-    vx: 0,
-    vy: 0,
-    score: 0,
-  },
-  {
-    x: width - 130,
-    y: height / 2,
-    width: 30,
-    height: 50,
-    vx: 0,
-    vy: 0,
-    score: 0,
-  },
-];
-let held = -1;
-let lastThrower = -1;
-
-window.addEventListener("keydown", (e) => {
-  if (e.key == "w") players[0].vy = -4;
-  if (e.key == "s") players[0].vy = 4;
-  if (e.key == "a") players[0].vx = -4;
-  if (e.key == "d") players[0].vx = 4;
-  if (e.code == "Space" && held != -1) {
-    lastThrower = held;
-    disc.vx = held == 0 ? 4 : -4;
-    disc.vy = players[held].vy != 0 ? players[held].vy : 0;
-    held = -1;
-  }
-});
-
-window.addEventListener("keyup", (e) => {
-  if (e.key == "w" && players[0].vy < 0) players[0].vy = 0;
-  if (e.key == "s" && players[0].vy > 0) players[0].vy = 0;
-  if (e.key == "a" && players[0].vx < 0) players[0].vx = 0;
-  if (e.key == "d" && players[0].vx > 0) players[0].vx = 0;
-});
-
-const courtRectangles = [
-  { x: 100, y: 0, width: width - 200, height: 50 },
-  { x: 100, y: height - 50, width: width - 200, height: 50 },
-];
-
-const goalRectangles = [
-  { x: 0, y: 50, width: 50, height: height - 100 },
-  { x: width - 50, y: 50, width: 50, height: height - 100 },
-];
-
-function getThemeColors() {
-
-    if (activeTheme == "midnight") {
-
-        return {
-            background: "#111827",
-            side: "#374151",
-            court: "#1e293b",
-            line: "#ffffff",
-            player: "#22c55e",
-            disc: "#ef4444"
-        };
-
-    }
-
-    if (activeTheme == "ocean") {
-
-        return {
-            background: "#0c4a6e",
-            side: "#075985",
-            court: "#38bdf8",
-            line: "#ffffff",
-            player: "#22c55e",
-            disc: "#facc15"
-        };
-
-    }
-
-    if (activeTheme == "sunset") {
-
-        return {
-            background: "#7c2d12",
-            side: "#9a3412",
-            court: "#fb923c",
-            line: "#ffffff",
-            player: "#22c55e",
-            disc: "#fef08a"
-        };
-
-    }
-
-}
+const canvas = document.getElementById('court');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
 
 function drawCourt() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#D9C9A3';
+  ctx.fillRect(0, 0, W, H);
 
-    var colors = getThemeColors();
-
-    ctx.fillStyle = colors.background;
-    ctx.fillRect(0,0,width,height);
-    ctx.fillStyle = colors.side;
-
-    ctx.fillRect(0,0,50,height);
-    ctx.fillRect(width - 50,0,50,height);
-    ctx.fillStyle = colors.court;
-
-    ctx.fillRect(100,0,width - 200,50);
-    ctx.fillRect(100,height - 50,width - 200,50);
-
-    ctx.beginPath();
-
-    ctx.strokeStyle = colors.line;
-    ctx.lineWidth = 3;
-    ctx.moveTo(width / 2,0);
-    ctx.lineTo(width / 2,height);
-    ctx.stroke();
-
-    ctx.strokeStyle = colors.line;
-    ctx.strokeRect(0,0,width,height);
-
+  ctx.strokeStyle = '#04141F';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(20, 20, W - 40, H - 40);
 }
 
-function drawDisc() {
+drawCourt()
 
-    var colors = getThemeColors();
+const player = { x: 150, y: H/2, radius: 26, color: '#FF7A59' };
+const ai     = { x: 750, y: H/2, radius: 26, color: '#29D3FF' };
+
+function drawPaddle(p) {
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+  ctx.fillStyle = p.color;
+  ctx.fill();
+}
+
+drawPaddle(player);
+drawPaddle(ai);
+
+const keys = new Set();
+  window.addEventListener( 'keydown', e => keys.add(e.key.toLowerCase()))
+  window.addEventListener( 'keyup', e => keys.delete(e.key.toLowerCase()))
+
+  function moveplayer() {
+
+  
+ let dx = 0, dy = 0;
+  if(keys.has('a') || keys.has('arrowleft')) dx -= 1;
+  if(keys.has('s') || keys.has('arrowdown')) dy += 1;
+  if(keys.has('d') || keys.has('arrowright')) dx += 1;
+  if(keys.has('w') || keys.has('arrowup'))    dy -= 1;
+
+  player.x += dx * 5;
+  player.y += dy * 5;
+
+  player.x = Math.max(player.radius, Math.min(W - player.radius, player.x));
+  player.y = Math.max(player.radius, Math.min(H - player.radius, player.y));
+  }
+
+
+
+  const disc = { x : W/2, y : H/2, radius : 12, vx : 0, vy : 0, held : null};
+
+  function drawdisc() {
     ctx.beginPath();
-
-    ctx.arc(disc.x,disc.y,disc.radius,0,Math.PI * 2);
-    ctx.fillStyle = colors.disc;
+    ctx.arc(disc.x, disc.y, disc.radius, 0, Math.PI * 2);
+    ctx.fillStyle =  '#4bc159';
     ctx.fill();
+
+  }
+
+  drawdisc();
+
+
+  function discUpdate(){
+if(disc.held){
+  disc.x = disc.held.x + disc.held.radius + disc.radius + 4;
+  disc.y = disc.held.y;
 }
 
-function discCollision(disc, rect) {
-  const closestX = Math.max(rect.x, Math.min(disc.x, rect.x + rect.width));
-  const closestY = Math.max(rect.y, Math.min(disc.y, rect.y + rect.height));
+disc.x += disc.vx;
+disc.y += disc.vy;
 
-  const dx = disc.x - closestX;
-  const dy = disc.y - closestY;
 
-  if (dx * dx + dy * dy < disc.radius * disc.radius) {
-    if (Math.abs(dx) > Math.abs(dy)) {
-      disc.vx = -disc.vx;
-      disc.x = closestX + Math.sign(dx) * disc.radius;
+
+if(disc.y - disc.radius < 20){
+  disc.y = disc.radius + 20;
+  disc.vy = -disc.vy * 0.95;
+
+}
+
+
+if(disc.y + disc.radius > H-20){
+  disc.y = H - 20 - disc.radius;
+  disc.vy = -disc.vy * 0.95;
+}
+
+  }
+
+
+  function checkCatch() {
+  if (disc.held) return;
+  const dPlayer = Math.hypot(disc.x - player.x, disc.y - player.y);
+  const dAi = Math.hypot(disc.x - ai.x, disc.y - ai.y);
+
+  if (dPlayer < player.radius + disc.radius + 4) {
+    disc.held = player;
+    disc.vx = 0; disc.vy = 0;
+  } else if (dAi < ai.radius + disc.radius + 4) {
+    disc.held = ai;
+    disc.vx = 0; disc.vy = 0;
+  }
+}
+
+
+
+const GOAL_TOP = H/2 - 85, GOAL_BOTTOM = H/2 + 85;
+let score = { p1: 0, p2: 0 };
+
+function checkGoals() {
+  if (disc.x - disc.radius < 26) {
+    if (disc.y > GOAL_TOP && disc.y < GOAL_BOTTOM) {
+      score.p2++; resetDisc();
     } else {
-      disc.vy = -disc.vy;
-      disc.y = closestY + Math.sign(dy) * disc.radius;
+      disc.x = 26 + disc.radius;
+      disc.vx = -disc.vx * 0.94;   
+    }
+  }
+  if (disc.x + disc.radius > W - 26) {
+    if (disc.y > GOAL_TOP && disc.y < GOAL_BOTTOM) {
+      score.p1++; resetDisc();
+    } else {
+      disc.x = W - 26 - disc.radius;
+      disc.vx = -disc.vx * 0.94;
     }
   }
 }
 
-function goalCollision(disc, rect) {
-  const closestX = Math.max(rect.x, Math.min(disc.x, rect.x + rect.width));
-  const closestY = Math.max(rect.y, Math.min(disc.y, rect.y + rect.height));
+function resetDisc() {
+  disc.x = W/2; disc.y = H/2;
+  disc.vx = 5; disc.vy = 2;
+  disc.held = null;
+}
 
-  const dx = disc.x - closestX;
-  const dy = disc.y - closestY;
 
-  if (dx * dx + dy * dy < disc.radius * disc.radius) {
-    disc.x = width / 2;
-    disc.y = height / 2;
-    disc.vx = -disc.vx;
+
+let charging = false;
+let charge = 0;
+
+window.addEventListener('keydown', e => {
+  if (e.key === ' ') charging = true;
+});
+
+window.addEventListener('keyup', e => {
+  if (e.key === ' ' && disc.held === player) {
+    let dx = 1, dy = 0;
+    if (keys.has('w')) dy = -1;
+    if (keys.has('s')) dy = 1;
+
+    const speed = 10 + charge * 0.16;   
+    disc.vx = dx * speed;
+    disc.vy = dy * speed;
+    disc.held = null;
+    charging = false;
+    charge = 0;
+  }
+});
+
+
+function updateCharge() {
+  if (charging && disc.held === player) {
+    charge = Math.min(30, charge + 1);   
   }
 }
 
-function playerCollision(disc, player, playerIndex) {
-  if (playerIndex == lastThrower) {
-    return;
-  }
 
-  const closestX = Math.max(
-    player.x,
-    Math.min(disc.x, player.x + player.width),
-  );
-  const closestY = Math.max(
-    player.y,
-    Math.min(disc.y, player.y + player.height),
-  );
-
-  const dx = disc.x - closestX;
-  const dy = disc.y - closestY;
-
-  if (dx * dx + dy * dy < disc.radius * disc.radius) {
-    held = playerIndex;
-    disc.vx = 0;
-    disc.vy = 0;
-  }
+function updateScoreboard() {
+  document.getElementById('scorebar').textContent = score.p1 + ' : ' + score.p2;
 }
 
-function updateDisc() {
-  if (held != -1) {
-    const p = players[held];
-    disc.x = held === 0 ? p.x + p.width + disc.radius : p.x - disc.radius;
-    disc.y = p.y + p.height / 2;
-  } else {
-    disc.x += disc.vx;
-    disc.y += disc.vy;
 
-    courtRectangles.forEach((rect) => discCollision(disc, rect));
-    goalRectangles.forEach((rect) => goalCollision(disc, rect));
-    players.forEach((player, index) => playerCollision(disc, player, index));
-  }
+
+
+function update() {
+  
+
+  moveplayer();
+  
+  updateCharge();
+  
+  discUpdate();
+  checkCatch();
+  checkGoals();
 }
 
-function drawPlayers() {
-  players.forEach((player) => {
-    ctx.beginPath();
-    ctx.fillStyle = "#00FF00";
-    ctx.fillRect(player.x, player.y, player.width, player.height);
-  });
-}
-
-function updatePlayer(player) {
-  player.x += player.vx;
-  player.y += player.vy;
-
-  if (player.x < 60) player.x = 60;
-  if (player.x > width / 2 - 40) player.x = width / 2 - 40;
-  if (player.y < 60) player.y = 60;
-  if (player.y > height - 110) player.y = height - 110;
-}
-
-function animate() {
+function render() {
   drawCourt();
-  drawDisc();
-  drawPlayers();
-  updateDisc();
-  updatePlayer(players[0]);
-
-  requestAnimationFrame(animate);
-}
-function starting() {
-
-    disc.x = width / 2;
-    disc.y = height / 2;
-
-    disc.vx = 0;
-    disc.vy = 0;
-
-    held = -1;
-    lastThrower = -1;
-
-    drawCourt();
-    drawDisc();
-    drawPlayers();
-
-    animate();
+  
+  drawPaddle(ai);
+  drawPaddle(player);
+  drawdisc();
+  updateScoreboard();
 }
 
+function loop() {
+  update();
+  render();
+  requestAnimationFrame(loop);
+}
+loop();
