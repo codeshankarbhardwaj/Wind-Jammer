@@ -1,12 +1,27 @@
-const canvas = document.getElementById("game");
+var home = document.getElementById("home");
+var start = document.getElementById("start");
+var theme = document.getElementById("theme");
+
+var canvas;
+var ctx;
+var activeTheme = "midnight";
 
 const width = 960;
 const height = 540;
 
-canvas.width = width;
-canvas.height = height;
+start.onclick = function() {
 
-const ctx = canvas.getContext("2d");
+    activeTheme = theme.value;
+    home.style.display = "none";
+    canvas = document.createElement("canvas");
+
+    canvas.width = width;
+    canvas.height = height;
+
+    document.body.appendChild(canvas);
+    ctx = canvas.getContext("2d");
+    starting();
+};
 
 const disc = {
   x: 400,
@@ -69,6 +84,87 @@ const goalRectangles = [
   { x: width - 50, y: 50, width: 50, height: height - 100 },
 ];
 
+function getThemeColors() {
+
+    if (activeTheme == "midnight") {
+
+        return {
+            background: "#111827",
+            side: "#374151",
+            court: "#1e293b",
+            line: "#ffffff",
+            player: "#22c55e",
+            disc: "#ef4444"
+        };
+
+    }
+
+    if (activeTheme == "ocean") {
+
+        return {
+            background: "#0c4a6e",
+            side: "#075985",
+            court: "#38bdf8",
+            line: "#ffffff",
+            player: "#22c55e",
+            disc: "#facc15"
+        };
+
+    }
+
+    if (activeTheme == "sunset") {
+
+        return {
+            background: "#7c2d12",
+            side: "#9a3412",
+            court: "#fb923c",
+            line: "#ffffff",
+            player: "#22c55e",
+            disc: "#fef08a"
+        };
+
+    }
+
+}
+
+function drawCourt() {
+
+    var colors = getThemeColors();
+
+    ctx.fillStyle = colors.background;
+    ctx.fillRect(0,0,width,height);
+    ctx.fillStyle = colors.side;
+
+    ctx.fillRect(0,0,50,height);
+    ctx.fillRect(width - 50,0,50,height);
+    ctx.fillStyle = colors.court;
+
+    ctx.fillRect(100,0,width - 200,50);
+    ctx.fillRect(100,height - 50,width - 200,50);
+
+    ctx.beginPath();
+
+    ctx.strokeStyle = colors.line;
+    ctx.lineWidth = 3;
+    ctx.moveTo(width / 2,0);
+    ctx.lineTo(width / 2,height);
+    ctx.stroke();
+
+    ctx.strokeStyle = colors.line;
+    ctx.strokeRect(0,0,width,height);
+
+}
+
+function drawDisc() {
+
+    var colors = getThemeColors();
+    ctx.beginPath();
+
+    ctx.arc(disc.x,disc.y,disc.radius,0,Math.PI * 2);
+    ctx.fillStyle = colors.disc;
+    ctx.fill();
+}
+
 function discCollision(disc, rect) {
   const closestX = Math.max(rect.x, Math.min(disc.x, rect.x + rect.width));
   const closestY = Math.max(rect.y, Math.min(disc.y, rect.y + rect.height));
@@ -125,34 +221,6 @@ function playerCollision(disc, player, playerIndex) {
   }
 }
 
-function drawCourt() {
-  ctx.fillStyle = "#F5EBD8";
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.fillStyle = "#D3D3D3";
-  ctx.fillRect(0, 0, 50, height);
-  ctx.fillRect(width, 0, -50, height);
-
-  ctx.fillStyle = "#E0FFFF";
-  ctx.fillRect(100, 0, width - 200, 50);
-  ctx.fillRect(100, height, width - 200, -50);
-
-  ctx.beginPath();
-  ctx.strokeStyle = "#000000";
-  ctx.lineWidth = 3;
-  ctx.moveTo(width / 2, 0);
-  ctx.lineTo(width / 2, height);
-  ctx.stroke();
-  ctx.strokeRect(0, 0, width, height);
-}
-
-function drawDisc() {
-  ctx.beginPath();
-  ctx.arc(disc.x, disc.y, disc.radius, 0, Math.PI * 2);
-  ctx.fillStyle = "#FF0000";
-  ctx.fill();
-}
-
 function updateDisc() {
   if (held != -1) {
     const p = players[held];
@@ -195,6 +263,21 @@ function animate() {
 
   requestAnimationFrame(animate);
 }
+function starting() {
 
-drawCourt();
-animate();
+    disc.x = width / 2;
+    disc.y = height / 2;
+
+    disc.vx = 0;
+    disc.vy = 0;
+
+    held = -1;
+    lastThrower = -1;
+
+    drawCourt();
+    drawDisc();
+    drawPlayers();
+
+    animate();
+}
+
