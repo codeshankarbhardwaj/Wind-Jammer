@@ -12,7 +12,7 @@ const disc = {
   x: 400,
   y: height / 2,
   radius: 30,
-  vx: -4,
+  vx: -8,
   vy: 0,
   curve: 0,
   curveDecay: 0.8,
@@ -53,7 +53,7 @@ window.addEventListener("keydown", (e) => {
       servingTo = waitingToServe;
       waitingToServe = -1;
     } else if (held != -1) {
-      disc.vx = held == 0 ? 4 : -4;
+      disc.vx = held == 0 ? 8 : -8;
       disc.vy = players[held].vy != 0 ? players[held].vy : 0;
 
       disc.curve = players[held].vy * 0.038;
