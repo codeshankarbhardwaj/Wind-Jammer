@@ -12,7 +12,7 @@ const disc = {
   x: 400,
   y: height / 2,
   radius: 30,
-  vx: 0,
+  vx: -4,
   vy: 0,
 };
 
@@ -36,8 +36,8 @@ const players = [
     score: 0,
   },
 ];
+
 let held = -1;
-let lastThrower = -1;
 
 window.addEventListener("keydown", (e) => {
   if (e.key == "w") players[0].vy = -4;
@@ -45,7 +45,6 @@ window.addEventListener("keydown", (e) => {
   if (e.key == "a") players[0].vx = -4;
   if (e.key == "d") players[0].vx = 4;
   if (e.code == "Space" && held != -1) {
-    lastThrower = held;
     disc.vx = held == 0 ? 4 : -4;
     disc.vy = players[held].vy != 0 ? players[held].vy : 0;
     held = -1;
@@ -60,8 +59,24 @@ window.addEventListener("keyup", (e) => {
 });
 
 const courtRectangles = [
-  { x: 100, y: 0, width: width - 200, height: 50 },
-  { x: 100, y: height - 50, width: width - 200, height: 50 },
+  {
+    x: 100,
+    y: 0,
+    width: width - 200,
+    height: 50,
+    offsetY: 0,
+    hitTimer: 0,
+    dir: -1,
+  },
+  {
+    x: 100,
+    y: height - 50,
+    width: width - 200,
+    height: 50,
+    offsetY: 0,
+    hitTimer: 0,
+    dir: 1,
+  },
 ];
 
 const goalRectangles = [
@@ -84,6 +99,9 @@ function discCollision(disc, rect) {
       disc.vy = -disc.vy;
       disc.y = closestY + Math.sign(dy) * disc.radius;
     }
+
+    rect.offsetY = rect.dir * 8;
+    rect.hitTimer = 6;
   }
 }
 
@@ -102,23 +120,28 @@ function goalCollision(disc, rect) {
 }
 
 function playerCollision(disc, player, playerIndex) {
-  if (playerIndex == lastThrower) {
-    return;
+  const facingDir = playerIndex == 0 ? 1 : -1;
+
+  const isApproachingFront =
+    (facingDir == 1 && disc.vx < 0) || (facingDir == -1 && disc.vx > 0);
+  if (!isApproachingFront) return;
+
+  const rectY = player.y + 36;
+  const isVerticallyAligned =
+    disc.y >= rectY && disc.y <= rectY + player.height;
+  if (!isVerticallyAligned) return;
+
+  let hitFront = false;
+  if (facingDir == 1) {
+    const frontX = player.x + player.width;
+    hitFront = disc.x - disc.radius <= frontX && disc.x >= player.x;
+  } else {
+    const frontX = player.x;
+    hitFront =
+      disc.x + disc.radius >= frontX && disc.x <= player.x + player.width;
   }
 
-  const closestX = Math.max(
-    player.x,
-    Math.min(disc.x, player.x + player.width),
-  );
-  const closestY = Math.max(
-    player.y,
-    Math.min(disc.y, player.y + player.height),
-  );
-
-  const dx = disc.x - closestX;
-  const dy = disc.y - closestY;
-
-  if (dx * dx + dy * dy < disc.radius * disc.radius) {
+  if (hitFront) {
     held = playerIndex;
     disc.vx = 0;
     disc.vy = 0;
@@ -133,9 +156,19 @@ function drawCourt() {
   ctx.fillRect(0, 0, 50, height);
   ctx.fillRect(width, 0, -50, height);
 
-  ctx.fillStyle = "#E0FFFF";
-  ctx.fillRect(100, 0, width - 200, 50);
-  ctx.fillRect(100, height, width - 200, -50);
+  courtRectangles.forEach((rect) => {
+    rect.offsetY *= 0.8;
+    if (Math.abs(rect.offsetY) < 0.1) rect.offsetY = 0;
+
+    if (rect.hitTimer > 0) {
+      rect.hitTimer--;
+      ctx.fillStyle = "#FFF";
+    } else {
+      ctx.fillStyle = "#E0FFFF";
+    }
+
+    ctx.fillRect(rect.x, rect.y + rect.offsetY, rect.width, rect.height);
+  });
 
   ctx.beginPath();
   ctx.strokeStyle = "#000000";
@@ -180,10 +213,12 @@ function updatePlayer(player) {
   player.x += player.vx;
   player.y += player.vy;
 
-  if (player.x < 60) player.x = 60;
-  if (player.x > width / 2 - 40) player.x = width / 2 - 40;
-  if (player.y < 60) player.y = 60;
-  if (player.y > height - 110) player.y = height - 110;
+  if (player.x < 100) player.x = 100;
+  if (player.x > width / 2 - player.width - 75)
+    player.x = width / 2 - player.width - 75;
+  if (player.y < 50) player.y = 50;
+  if (player.y > height - 125 - player.height)
+    player.y = height - 125 - player.height;
 }
 
 function animate() {
