@@ -612,6 +612,9 @@ function drawDisc() {
       ctx.fillStyle = "#ffea00";
       ctx.fill();
     }
+
+    rect.offsetY = rect.dir * 8;
+    rect.hitTimer = 6;
   }
 
   ctx.beginPath();
