@@ -280,10 +280,42 @@ function updatePlayer(player) {
     player.y = height - 100 - player.height;
 }
 
+function drawScoreboard() {
+  const scores = [players[0].score, players[1].score];
+  const positions = [width / 4, (3 * width) / 4];
+  const labels = ["P1", "P2"];
+
+  positions.forEach((cx, i) => {
+    const text = `${labels[i]}  ${scores[i]}`;
+    ctx.font = "bold 22px monospace";
+    const textW = ctx.measureText(text).width;
+
+    const padX = 14,
+      padY = 8;
+    const rx = cx - textW / 2 - padX;
+    const ry = 6;
+    const rw = textW + padX * 2;
+    const rh = 22 + padY * 2;
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.beginPath();
+    ctx.roundRect(rx, ry, rw, rh, 8);
+    ctx.fill();
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, cx, ry + rh / 2);
+  });
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+}
+
 function animate() {
   drawCourt();
   drawDisc();
   drawPlayers();
+  drawScoreboard();
   updateDisc();
   updatePlayer(players[0]);
 
