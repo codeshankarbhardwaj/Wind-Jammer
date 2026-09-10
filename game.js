@@ -18,6 +18,67 @@ const beachImages = {
   leftGoalGuard: new Image(),
   rightGoalGuard: new Image(),
 };
+const speakerImages = {
+  muted: new Image(),
+  speaker: new Image(),
+};
+
+const playerSprites = {
+  idle: { img: new Image(), frameW: 35, frameH: 54, frames: 10, fps: 10 },
+  throw: { img: new Image(), frameW: 72, frameH: 68, frames: 11, fps: 14 },
+  catch: { img: new Image(), frameW: 57, frameH: 57, frames: 3, fps: 10 },
+};
+playerSprites.idle.img.src = "assets/images/player/idle.png";
+playerSprites.throw.img.src = "assets/images/player/throw.png";
+playerSprites.catch.img.src = "assets/images/player/catch.png";
+
+const playerAnim = [
+  { state: "idle", frame: 0, tick: 0, playOnce: false },
+  { state: "idle", frame: 0, tick: 0, playOnce: false },
+];
+
+function tickAnim(anim) {
+  const sheet = playerSprites[anim.state];
+  const ticksPerFrame = Math.round(60 / sheet.fps);
+  anim.tick++;
+  if (anim.tick >= ticksPerFrame) {
+    anim.tick = 0;
+    anim.frame++;
+    if (anim.frame >= sheet.frames) {
+      if (anim.playOnce) {
+        anim.state = "idle";
+        anim.playOnce = false;
+      }
+      anim.frame = 0;
+    }
+  }
+  return anim.frame;
+}
+
+function setAnim(playerIndex, state, playOnce = false) {
+  const anim = playerAnim[playerIndex];
+  if (anim.state === state) return;
+  anim.state = state;
+  anim.frame = 0;
+  anim.tick = 0;
+  anim.playOnce = playOnce;
+}
+
+const sounds = {
+  bgm: new Audio("assets/sounds/bgm.ogg"),
+  block: new Audio("assets/sounds/block.wav"),
+  throw: new Audio("assets/sounds/throw.wav"),
+  goal: new Audio("assets/sounds/goal.wav"),
+};
+sounds.bgm.loop = true;
+
+function playSound(name) {
+  if (muted) return;
+  const s = sounds[name];
+  if (!s) return;
+  s.currentTime = 0;
+  s.play();
+}
 
 beachImages.base.src = "assets/images/background/beach/base.png";
 beachImages.topRail.src = "assets/images/background/beach/topRail.png";
@@ -29,6 +90,18 @@ beachImages.leftGoalGuard.src =
   "assets/images/background/beach/leftGoalGuard.png";
 beachImages.rightGoalGuard.src =
   "assets/images/background/beach/rightGoalGuard.png";
+
+speakerImages.muted.src = "assets/images/ui/muted.svg";
+speakerImages.speaker.src = "assets/images/ui/speaker.svg";
+
+let bgmStarted = false;
+function startBgm() {
+  if (bgmStarted) return;
+  bgmStarted = true;
+  sounds.bgm.play();
+}
+window.addEventListener("keydown", startBgm, { once: false });
+window.addEventListener("pointerdown", startBgm, { once: false });
 
 let bgFrame = 0;
 let bgTick = 0;
@@ -49,30 +122,33 @@ const disc = {
   history: [],
 };
 
+const muteButton = {
+  x: 860,
+  y: 10,
+  width: 40,
+  height: 40,
+};
+
 const players = [
   {
     x: 110,
     y: height / 2 - 45,
-    width: 34,
-    height: 86,
+    width: 60,
+    height: 90,
     vx: 0,
     vy: 0,
     score: 0,
     sets: 0,
-    color: "#00e5ff",
-    trim: "#ffffff",
   },
   {
     x: width - 144,
     y: height / 2 - 45,
-    width: 34,
-    height: 86,
+    width: 60,
+    height: 90,
     vx: 0,
     vy: 0,
     score: 0,
     sets: 0,
-    color: "#ff3d00",
-    trim: "#ffeb3b",
   },
 ];
 
@@ -81,24 +157,31 @@ let servingTo = -1;
 let serveDelay = 0;
 let servingPlayer = -1;
 let lastGoalScorer = -1;
+let muted = false;
 
 let matchTimer = 99;
 let timerTicks = 0;
 
+let gameOver = false;
+let winner = -1;
+
 const throwDelays = [0, 0];
 const throwCooldowns = [0, 0];
-
-const ai = {
-  reactionJitter: 0,
-};
 
 window.addEventListener("keydown", (e) => {
   if (e.key == "w") players[0].vy = -7;
   if (e.key == "s") players[0].vy = 7;
   if (e.key == "a") players[0].vx = -7;
   if (e.key == "d") players[0].vx = 7;
-  if (e.code == "Space" && held == 0) {
-    throwDelays[0] = 0;
+  if (e.code == "Space") {
+    e.preventDefault();
+    if (e.repeat) return;
+    const throwAnimDuration =
+      playerSprites.throw.frames * Math.round(60 / playerSprites.throw.fps);
+    if (held == 0 && throwDelays[0] > throwAnimDuration) {
+      setAnim(0, "throw", true);
+      throwDelays[0] = throwAnimDuration;
+    }
   }
 });
 
@@ -107,6 +190,65 @@ window.addEventListener("keyup", (e) => {
   if (e.key == "s" && players[0].vy > 0) players[0].vy = 0;
   if (e.key == "a" && players[0].vx < 0) players[0].vx = 0;
   if (e.key == "d" && players[0].vx > 0) players[0].vx = 0;
+});
+
+window.addEventListener("pointerdown", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const mouseX = (e.clientX - rect.left) * scaleX;
+  const mouseY = (e.clientY - rect.top) * scaleY;
+
+  if (
+    mouseX >= muteButton.x &&
+    mouseX <= muteButton.x + muteButton.width &&
+    mouseY >= muteButton.y &&
+    mouseY <= muteButton.y + muteButton.height
+  ) {
+    muted = !muted;
+    sounds.bgm.muted = muted;
+  }
+
+  if (
+    gameOver &&
+    mouseX >= 356 &&
+    mouseX <= 556 &&
+    mouseY >= 390 &&
+    mouseY <= 442
+  ) {
+    players[0].score = 0;
+    players[1].score = 0;
+    disc.x = width / 2;
+    disc.y = (RAIL_TOP_Y + RAIL_BOTTOM_Y) / 2;
+    disc.vx = -8;
+    disc.vy = 0;
+    disc.curve = 0;
+    disc.history = [];
+    held = -1;
+    servingTo = -1;
+    serveDelay = 0;
+    servingPlayer = -1;
+    lastGoalScorer = -1;
+    matchTimer = 99;
+    timerTicks = 0;
+    throwDelays[0] = 0;
+    throwDelays[1] = 0;
+    throwCooldowns[0] = 0;
+    throwCooldowns[1] = 0;
+    players[0].x = 110;
+    players[0].y = height / 2 - 45;
+    players[0].vx = 0;
+    players[0].vy = 0;
+    players[1].x = width - 144;
+    players[1].y = height / 2 - 45;
+    players[1].vx = 0;
+    players[1].vy = 0;
+    playerAnim[0] = { state: "idle", frame: 0, tick: 0, playOnce: false };
+    playerAnim[1] = { state: "idle", frame: 0, tick: 0, playOnce: false };
+    gameOver = false;
+    winner = -1;
+    animate();
+  }
 });
 
 const RAIL_TOP_Y = 56 * 3;
@@ -121,20 +263,19 @@ const goalRectangles = [
   {
     x: 0,
     y: RAIL_TOP_Y,
-    width: 70,
+    width: 30,
     height: RAIL_BOTTOM_Y - RAIL_TOP_Y,
     left: true,
   },
   {
-    x: width - 70,
+    x: width - 30,
     y: RAIL_TOP_Y,
-    width: 70,
+    width: 30,
     height: RAIL_BOTTOM_Y - RAIL_TOP_Y,
   },
 ];
 
 function bounceRails(disc) {
-
   if (disc.y - disc.radius < RAIL_TOP_Y) {
     disc.y = RAIL_TOP_Y + disc.radius;
     disc.vy = Math.abs(disc.vy);
@@ -158,7 +299,6 @@ function goalCollision(disc, rect) {
   const dy = disc.y - closestY;
 
   if (dx * dx + dy * dy < disc.radius * disc.radius) {
-
     const hitY = disc.y;
     const goalH = RAIL_BOTTOM_Y - RAIL_TOP_Y;
     const seg3H = Math.floor(goalH * 0.28);
@@ -166,6 +306,8 @@ function goalCollision(disc, rect) {
     const bottomBand = RAIL_BOTTOM_Y - seg3H;
 
     const pointsAwarded = hitY < topBand || hitY > bottomBand ? 3 : 5;
+
+    playSound("goal");
 
     disc.x = width / 2;
     disc.y = (RAIL_TOP_Y + RAIL_BOTTOM_Y) / 2;
@@ -176,19 +318,19 @@ function goalCollision(disc, rect) {
 
     if (rect.left) {
       players[1].score += pointsAwarded;
-      if (players[1].score >= 12) {
-        players[1].sets++;
-        players[0].score = 0;
-        players[1].score = 0;
+      if (players[1].score >= 15) {
+        gameOver = true;
+        winner = 1;
+        return;
       }
       servingPlayer = 0;
       lastGoalScorer = 1;
     } else {
       players[0].score += pointsAwarded;
-      if (players[0].score >= 12) {
-        players[0].sets++;
-        players[0].score = 0;
-        players[1].score = 0;
+      if (players[0].score >= 15) {
+        gameOver = true;
+        winner = 0;
+        return;
       }
       servingPlayer = 1;
       lastGoalScorer = 0;
@@ -229,6 +371,8 @@ function playerCollision(disc, player, playerIndex) {
         ? player.x + player.width + disc.radius
         : player.x - disc.radius;
     disc.y = player.y + player.height / 2;
+    setAnim(playerIndex, "catch", true);
+    playSound("block");
     if (playerIndex == 0) {
       throwDelays[0] = 180;
     } else {
@@ -264,7 +408,6 @@ function drawCourt() {
       beachImages.rightGoalGuard,
       beachImages.leftGoal,
       beachImages.rightGoal,
-
     ];
 
     overlays.forEach((img) => {
@@ -323,186 +466,113 @@ function drawCourt() {
     ctx.fillRect(0, 0, width, height);
   }
 }
-
-
+const SCALE = 3;
 
 function drawScoreboard() {
-  const sbW = 460;
-  const sbH = 50;
-  const sbX = width / 2 - sbW / 2;
-  const sbY = 6;
-
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
 
-  ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
-  ctx.beginPath();
-  ctx.roundRect(sbX + 4, sbY + 4, sbW, sbH, 8);
-  ctx.fill();
+  const scoreColor = "#e8d89a";
+  const timeFgColor = matchTimer <= 10 ? "#ff4444" : "#e8d89a";
 
-  const bgGrad = ctx.createLinearGradient(sbX, sbY, sbX, sbY + sbH);
-  bgGrad.addColorStop(0, "#222c44");
-  bgGrad.addColorStop(0.5, "#151b2b");
-  bgGrad.addColorStop(1, "#0d111b");
-  ctx.fillStyle = bgGrad;
-  ctx.beginPath();
-  ctx.roundRect(sbX, sbY, sbW, sbH, 8);
-  ctx.fill();
+  function draw7Seg(digit, x, y, w, h, color) {
+    const X = x * SCALE;
+    const Y = y * SCALE;
+    const W = w * SCALE;
+    const H = h * SCALE;
+    const sw = Math.max(2, Math.round(H * 0.09));
+    const g = Math.max(1, Math.round(sw * 0.4));
+    const dim = "rgba(0,0,0,0.25)";
 
-  ctx.strokeStyle = "#fbc02d";
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
+    const MAP = [
+      [1, 1, 1, 1, 1, 1, 0],
+      [0, 1, 1, 0, 0, 0, 0],
+      [1, 1, 0, 1, 1, 0, 1],
+      [1, 1, 1, 1, 0, 0, 1],
+      [0, 1, 1, 0, 0, 1, 1],
+      [1, 0, 1, 1, 0, 1, 1],
+      [1, 0, 1, 1, 1, 1, 1],
+      [1, 1, 1, 0, 0, 0, 0],
+      [1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 0, 1, 1],
+    ];
+    const d = parseInt(digit, 10);
+    if (isNaN(d)) return;
+    const s = MAP[d];
+    const midY = Y + H / 2;
 
-  const timerBoxW = 90;
-  const timerBoxH = 40;
-  const timerBoxX = width / 2 - timerBoxW / 2;
-  const timerBoxY = sbY + 5;
+    ctx.save();
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = color;
 
-  ctx.fillStyle = "#070a12";
-  ctx.beginPath();
-  ctx.roundRect(timerBoxX, timerBoxY, timerBoxW, timerBoxH, 6);
-  ctx.fill();
-  ctx.strokeStyle = "#455a64";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+    function hSeg(sy, on) {
+      ctx.fillStyle = on ? color : dim;
+      ctx.fillRect(X + sw + g, sy - Math.round(sw / 2), W - 2 * (sw + g), sw);
+    }
+    function vSeg(sx, sy, on) {
+      ctx.fillStyle = on ? color : dim;
+      ctx.fillRect(
+        sx - Math.round(sw / 2),
+        sy + sw + g,
+        sw,
+        H / 2 - sw - 2 * g,
+      );
+    }
 
-  ctx.font = "bold 9px monospace";
-  ctx.fillStyle = "#fbc02d";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.fillText("TIME", width / 2, timerBoxY + 4);
+    hSeg(Y, s[0]);
+    vSeg(X + W, Y, s[1]);
+    vSeg(X + W, midY, s[2]);
+    hSeg(Y + H, s[3]);
+    vSeg(X, midY, s[4]);
+    vSeg(X, Y, s[5]);
+    hSeg(midY, s[6]);
 
-  ctx.font = "bold 22px monospace";
-  ctx.fillStyle = matchTimer <= 10 ? "#ff1744" : "#ffeb3b";
-  ctx.textBaseline = "bottom";
-  const timerStr = matchTimer < 10 ? "0" + matchTimer : "" + matchTimer;
-  ctx.fillText(timerStr, width / 2, timerBoxY + timerBoxH - 2);
+    ctx.restore();
+  }
 
-  const p1TagX = sbX + 14;
-  const p1TagY = sbY + 12;
-  ctx.fillStyle = "#00e5ff";
-  ctx.beginPath();
-  ctx.roundRect(p1TagX, p1TagY, 44, 24, 4);
-  ctx.fill();
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  const p1Score = players[0].score;
+  draw7Seg(Math.floor(p1Score / 10) % 10, 113, 16, 13, 11, scoreColor);
+  draw7Seg(p1Score % 10, 129, 16, 13, 11, scoreColor);
 
-  ctx.font = "bold 13px monospace";
-  ctx.fillStyle = "#091428";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("1P", p1TagX + 22, p1TagY + 13);
+  const p2Score = players[1].score;
+  draw7Seg(Math.floor(p2Score / 10) % 10, 161, 16, 13, 11, scoreColor);
+  draw7Seg(p2Score % 10, 177, 16, 13, 11, scoreColor);
 
-  const p1ScoreX = sbX + 115;
-  const p1ScoreStr =
-    players[0].score < 10 ? "0" + players[0].score : "" + players[0].score;
-  ctx.font = "bold 24px monospace";
-  ctx.fillStyle = "#000000";
-  ctx.fillText(p1ScoreStr, p1ScoreX + 2, sbY + 28);
-  ctx.fillStyle = "#00e5ff";
-  ctx.fillText(p1ScoreStr, p1ScoreX, sbY + 26);
-
-  drawSetLamps(sbX + 148, sbY + 25, players[0].sets, "#00e5ff");
-
-  const p2TagX = sbX + sbW - 68;
-  const p2TagY = sbY + 12;
-  ctx.fillStyle = "#ff1744";
-  ctx.beginPath();
-  ctx.roundRect(p2TagX, p2TagY, 54, 24, 4);
-  ctx.fill();
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  ctx.font = "bold 12px monospace";
-  ctx.fillStyle = "#ffffff";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("CPU", p2TagX + 27, p2TagY + 13);
-
-  const p2ScoreX = sbX + sbW - 118;
-  const p2ScoreStr =
-    players[1].score < 10 ? "0" + players[1].score : "" + players[1].score;
-  ctx.font = "bold 24px monospace";
-  ctx.fillStyle = "#000000";
-  ctx.fillText(p2ScoreStr, p2ScoreX + 2, sbY + 28);
-  ctx.fillStyle = "#ff5252";
-  ctx.fillText(p2ScoreStr, p2ScoreX, sbY + 26);
-
-  drawSetLamps(sbX + sbW - 162, sbY + 25, players[1].sets, "#ff5252");
+  const t = Math.max(0, Math.ceil(matchTimer));
+  draw7Seg(Math.floor(t / 10) % 10, 145, 21, 5, 6, timeFgColor);
+  draw7Seg(t % 10, 152, 21, 5, 6, timeFgColor);
 
   ctx.restore();
 }
 
-function drawSetLamps(x, y, count, activeColor) {
-  for (let i = 0; i < 2; i++) {
-    const lx = x + i * 14;
-    ctx.beginPath();
-    ctx.arc(lx, y, 4.5, 0, Math.PI * 2);
-    if (i < count) {
-      ctx.fillStyle = activeColor;
-      ctx.fill();
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = "#1e2638";
-      ctx.fill();
-      ctx.strokeStyle = "#3e4c66";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-  }
-}
-
 function drawPlayers() {
+  const idleSheet = playerSprites.idle;
+  const baseScale = players[0].height / idleSheet.frameH;
+
   players.forEach((player, idx) => {
+    const anim = playerAnim[idx];
+    const sheet = playerSprites[anim.state];
+    const frame = tickAnim(anim);
+
+    const fw = sheet.frameW;
+    const fh = sheet.frameH;
+    const dw = fw * baseScale;
+    const dh = fh * baseScale;
+    const footX = player.x + player.width / 2;
+    const footY = player.y + player.height;
+    const drawX = footX - dw / 2;
+    const drawY = footY - dh;
+
     ctx.save();
+    ctx.imageSmoothingEnabled = false;
 
-    ctx.beginPath();
-    ctx.ellipse(
-      player.x + player.width / 2,
-      player.y + player.height + 4,
-      player.width * 0.75,
-      7,
-      0,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
-    ctx.fill();
-
-    const bodyGrad = ctx.createLinearGradient(
-      player.x,
-      player.y,
-      player.x + player.width,
-      player.y + player.height,
-    );
-    bodyGrad.addColorStop(0, player.color);
-    bodyGrad.addColorStop(1, idx == 0 ? "#0091ea" : "#b71c1c");
-
-    ctx.fillStyle = bodyGrad;
-    ctx.beginPath();
-    ctx.roundRect(player.x, player.y, player.width, player.height, 6);
-    ctx.fill();
-
-    ctx.fillStyle = player.trim;
-    ctx.fillRect(player.x + 4, player.y + 12, player.width - 8, 5);
-    ctx.fillRect(player.x + 4, player.y + 24, player.width - 8, 5);
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 11px monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(
-      idx == 0 ? "1P" : "2P",
-      player.x + player.width / 2,
-      player.y + player.height / 2 + 10,
-    );
-
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(player.x, player.y, player.width, player.height);
+    if (idx === 1) {
+      ctx.translate(drawX + dw, drawY);
+      ctx.scale(-1, 1);
+      ctx.drawImage(sheet.img, frame * fw, 0, fw, fh, 0, 0, dw, dh);
+    } else {
+      ctx.drawImage(sheet.img, frame * fw, 0, fw, fh, drawX, drawY, dw, dh);
+    }
 
     ctx.restore();
   });
@@ -572,32 +642,6 @@ function drawDisc() {
 
 function drawGoalBanner() {
   if (serveDelay <= 30) return;
-
-  ctx.save();
-  ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
-  ctx.fillRect(0, height / 2 - 45, width, 90);
-
-  const bannerGrad = ctx.createLinearGradient(
-    0,
-    height / 2 - 40,
-    0,
-    height / 2 + 40,
-  );
-  bannerGrad.addColorStop(0, "#ff1744");
-  bannerGrad.addColorStop(0.5, "#ffea00");
-  bannerGrad.addColorStop(1, "#ff1744");
-  ctx.fillStyle = bannerGrad;
-  ctx.fillRect(0, height / 2 - 38, width, 76);
-
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(0, height / 2 - 38);
-  ctx.lineTo(width, height / 2 - 38);
-  ctx.moveTo(0, height / 2 + 38);
-  ctx.lineTo(width, height / 2 + 38);
-  ctx.stroke();
-
   ctx.font = "bold 30px monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -609,6 +653,36 @@ function drawGoalBanner() {
   ctx.fillText(scorerText, width / 2, height / 2);
 
   ctx.restore();
+}
+
+function drawMutedBtn() {
+  ctx.beginPath();
+  ctx.fillStyle = "#ffffff";
+  ctx.roundRect(
+    muteButton.x,
+    muteButton.y,
+    muteButton.width,
+    muteButton.height,
+    6,
+  );
+  ctx.fill();
+  if (muted) {
+    ctx.drawImage(
+      speakerImages.muted,
+      muteButton.x + 4,
+      muteButton.y + 2,
+      muteButton.width - 4,
+      muteButton.height - 4,
+    );
+  } else {
+    ctx.drawImage(
+      speakerImages.speaker,
+      muteButton.x + 2,
+      muteButton.y + 2,
+      muteButton.width - 4,
+      muteButton.height - 4,
+    );
+  }
 }
 
 function updateDisc() {
@@ -706,34 +780,64 @@ function updatePlayer(player, isRight = false) {
   }
 
   if (player.y < RAIL_TOP_Y) player.y = RAIL_TOP_Y;
-  if (player.y > RAIL_BOTTOM_Y - player.height)
-    player.y = RAIL_BOTTOM_Y - player.height;
+  if (player.y > RAIL_BOTTOM_Y - player.height - 50)
+    player.y = RAIL_BOTTOM_Y - player.height - 50;
 }
 
 function updateHumanThrow() {
   if (held != 0) return;
   const p = players[0];
+  const throwAnimDuration =
+    playerSprites.throw.frames * Math.round(60 / playerSprites.throw.fps);
 
   if (throwDelays[0] > 0) {
     throwDelays[0]--;
+    if (throwDelays[0] === throwAnimDuration) {
+      setAnim(0, "throw", true);
+    }
   } else {
     disc.vx = 9.5;
     disc.vy = p.vy != 0 ? p.vy : 0;
-    disc.curve = p.vy * 0.038;
+    disc.curve = p.vy * 0.1;
     held = -1;
     throwCooldowns[0] = 30;
     throwDelays[0] = 0;
+    setAnim(0, "idle");
+    playSound("throw");
   }
 }
 
 function updateAI() {
   const ai_player = players[1];
-  const speed = 6;
+  const speed = 4;
   const centerY = height / 2 - ai_player.height / 2;
+
+  if (serveDelay > 0 || servingTo !== -1) {
+    const aiHomeX = width - 144;
+    const dxHome = aiHomeX - ai_player.x;
+    ai_player.vx =
+      Math.abs(dxHome) > 1
+        ? Math.sign(dxHome) * Math.min(speed * 0.6, Math.abs(dxHome))
+        : 0;
+    const dyCenter = centerY - ai_player.y;
+    ai_player.vy =
+      Math.abs(dyCenter) > 1
+        ? Math.sign(dyCenter) * Math.min(speed, Math.abs(dyCenter))
+        : 0;
+    return;
+  }
 
   if (held == 1) {
     if (throwDelays[1] > 0) {
       throwDelays[1]--;
+      if (
+        throwDelays[1] <=
+          playerSprites.throw.frames *
+            Math.round(60 / playerSprites.throw.fps) &&
+        playerAnim[1].state !== "throw"
+      ) {
+        setAnim(1, "throw", true);
+      }
     } else {
       const targetY = players[0].y + players[0].height / 2;
       const discY = ai_player.y + ai_player.height / 2;
@@ -741,50 +845,34 @@ function updateAI() {
       const dist = Math.abs(dy) || 1;
 
       const throwVy = (dy / dist) * (2 + Math.random() * 3);
-      disc.vx = -9.5;
+      disc.vx = -7.5;
       disc.vy = throwVy;
       disc.curve = throwVy * 0.038 * (Math.random() > 0.5 ? 1 : -1);
       held = -1;
       throwCooldowns[1] = 30;
       throwDelays[1] = 0;
+      setAnim(1, "idle");
+      playSound("throw");
     }
     ai_player.vx = 0;
     ai_player.vy = 0;
     return;
   }
 
-  let targetY;
-  if (disc.vx > 0 || held == -1) {
-    const aiCenterX = ai_player.x + ai_player.width / 2;
-    const dx = aiCenterX - disc.x;
-    const travelTime = disc.vx != 0 ? dx / disc.vx : 0;
-    const predictedY = disc.y + disc.vy * travelTime + ai.reactionJitter;
-
-    const minY = RAIL_TOP_Y + ai_player.height / 2;
-    const maxY = RAIL_BOTTOM_Y - ai_player.height / 2;
-    targetY = Math.max(minY, Math.min(maxY, predictedY)) - ai_player.height / 2;
-  } else {
-    targetY = centerY;
-  }
+  const targetY = disc.vx > 0 ? disc.y - ai_player.height / 2 : centerY;
 
   const dyTarget = targetY - ai_player.y;
-  if (Math.abs(dyTarget) > 2) {
-    ai_player.vy = Math.sign(dyTarget) * speed;
-  } else {
-    ai_player.vy = 0;
-  }
+  ai_player.vy =
+    Math.abs(dyTarget) > 1
+      ? Math.sign(dyTarget) * Math.min(speed, Math.abs(dyTarget))
+      : 0;
 
   const aiHomeX = width - 144;
   const dxHome = aiHomeX - ai_player.x;
-  if (Math.abs(dxHome) > 4) {
-    ai_player.vx = Math.sign(dxHome) * (speed * 0.6);
-  } else {
-    ai_player.vx = 0;
-  }
-
-  if (Math.random() < 1 / 60) {
-    ai.reactionJitter = (Math.random() - 0.5) * 40;
-  }
+  ai_player.vx =
+    Math.abs(dxHome) > 1
+      ? Math.sign(dxHome) * Math.min(speed * 0.6, Math.abs(dxHome))
+      : 0;
 }
 
 function updateTimer() {
@@ -800,7 +888,44 @@ function updateTimer() {
   }
 }
 
+function drawGameOver() {
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(0, 0, width, height);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "bold 36px monospace";
+  ctx.fillStyle = "#000";
+  ctx.fillText(
+    winner === 0 ? "PLAYER 1 WINS!" : "CPU WINS!",
+    width / 2 + 3,
+    height / 2 - 47,
+  );
+  ctx.fillStyle = winner === 0 ? "#00e5ff" : "#ff4444";
+  ctx.fillText(
+    winner === 0 ? "PLAYER 1 WINS!" : "CPU WINS!",
+    width / 2,
+    height / 2 - 50,
+  );
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.roundRect(356, 390, 200, 52, 10);
+  ctx.fill();
+  ctx.font = "bold 18px monospace";
+  ctx.fillStyle = "#111";
+  ctx.fillText("PLAY AGAIN", width / 2, 416);
+}
+
 function animate() {
+  if (gameOver) {
+    drawCourt();
+    drawDisc();
+    drawPlayers();
+    drawScoreboard();
+    drawMutedBtn();
+    drawGameOver();
+    return;
+  }
+
   updateTimer();
   drawCourt();
   drawDisc();
@@ -812,6 +937,7 @@ function animate() {
   updateHumanThrow();
   updateAI();
   updatePlayer(players[1], true);
+  drawMutedBtn();
 
   requestAnimationFrame(animate);
 }
