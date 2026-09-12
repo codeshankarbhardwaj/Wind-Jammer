@@ -218,27 +218,6 @@ function drawCourt() {
   const courtW = width - 140;
   const courtH = height - 104;
 
-  const grad = ctx.createLinearGradient(0, courtY, 0, courtY + courtH);
-  grad.addColorStop(0, "#f3ce85");
-  grad.addColorStop(0.5, "#fad89a");
-  grad.addColorStop(1, "#ebd08c");
-  ctx.fillStyle = grad;
-  ctx.fillRect(courtX, courtY, courtW, courtH);
-
-  ctx.strokeStyle = "rgba(224, 185, 110, 0.4)";
-  ctx.lineWidth = 1;
-  for (let x = courtX + 40; x < courtX + courtW; x += 40) {
-    ctx.beginPath();
-    ctx.moveTo(x, courtY);
-    ctx.lineTo(x, courtY + courtH);
-    ctx.stroke();
-  }
-  for (let y = courtY + 36; y < courtY + courtH; y += 36) {
-    ctx.beginPath();
-    ctx.moveTo(courtX, y);
-    ctx.lineTo(courtX + courtW, y);
-    ctx.stroke();
-  }
 
   ctx.strokeStyle = "#ffffff";
   ctx.lineWidth = 4;
@@ -274,55 +253,7 @@ function drawCourt() {
 
   drawGoalZones();
 
-  courtRectangles.forEach((rect) => {
-    rect.offsetY *= 0.8;
-    if (Math.abs(rect.offsetY) < 0.1) rect.offsetY = 0;
-
-    const ry = rect.y + rect.offsetY;
-
-    if (rect.hitTimer > 0) {
-      rect.hitTimer--;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(rect.x, ry, rect.width, rect.height);
-      ctx.strokeStyle = "#ffeb3b";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(rect.x, ry, rect.width, rect.height);
-    } else {
-      ctx.fillStyle = "#1e2838";
-      ctx.fillRect(rect.x, ry, rect.width, rect.height);
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(rect.x, ry, rect.width, rect.height);
-      ctx.clip();
-      ctx.fillStyle = "#fbc02d";
-      const stripeW = 28;
-      for (
-        let sx = rect.x - 50;
-        sx < rect.x + rect.width + 50;
-        sx += stripeW * 2
-      ) {
-        ctx.beginPath();
-        ctx.moveTo(sx, ry);
-        ctx.lineTo(sx + stripeW, ry);
-        ctx.lineTo(sx + stripeW - 20, ry + rect.height);
-        ctx.lineTo(sx - 20, ry + rect.height);
-        ctx.fill();
-      }
-      ctx.restore();
-
-      ctx.strokeStyle = "#37474f";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(rect.x, ry, rect.width, rect.height);
-      ctx.fillStyle = rect.dir == -1 ? "#4fc3f7" : "#ff8a80";
-      ctx.fillRect(
-        rect.x,
-        rect.dir == -1 ? ry + rect.height - 4 : ry,
-        rect.width,
-        4,
-      );
-    }
-  });
+ 
 }
 
 function drawGoalZones() {
